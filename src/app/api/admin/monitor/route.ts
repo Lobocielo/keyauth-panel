@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
 
     await ensureDb();
 
-    // Clean up old sessions (older than 5 minutes without heartbeat)
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     await dbRun(
-      "DELETE FROM active_sessions WHERE last_heartbeat < datetime('now', '-5 minutes')",
-      []
+      "DELETE FROM active_sessions WHERE last_heartbeat < ?",
+      [cutoff]
     );
 
     const url = new URL(req.url);

@@ -1,214 +1,320 @@
-const RAW_URL = process.env.DATABASE_URL || "";
-const TURSO_URL = RAW_URL.replace("libsql://", "https://");
-const TURSO_TOKEN = process.env.DATABASE_AUTH_TOKEN || "";
+const GIST_ID = process.env.GIST_ID || "211a9502e310ec848c1fe8c1c5a51258";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 
-async function tursoExec(sql: string, args: any[] = []): Promise<any> {
-  const url = `${TURSO_URL}/v2/pipeline`;
-  const stmt: any = { sql };
-  if (args.length > 0) {
-    stmt.args = args.map((a) => ({ type: "text", value: String(a) }));
+export interface GistDB {
+  apps: any[];
+  admins: any[];
+  resellers: any[];
+  keys: any[];
+  end_users: any[];
+  login_history: any[];
+  active_sessions: any[];
+  next_id: { key: number; user: number; reseller: number; session: number };
+}
+
+let cachedDB: GistDB | null = null;
+let lastRead = 0;
+const CACHE_TTL = 2000;
+
+const defaultDB: GistDB = {
+  apps: [{ id: 1, name: "Default App", secret: "1yfUR0CH18FdIN7galQapWCMY8GxZmCx" }],
+  admins: [{ id: 1, username: "Zeniht", password: "Zeniht2025", role: "admin" }],
+  resellers: [],
+  keys: [],
+  end_users: [],
+  login_history: [],
+  active_sessions: [],
+  next_id: { key: 1, user: 1, reseller: 1, session: 1 },
+};
+
+async function gistRead(): Promise<GistDB> {
+  const now = Date.now();
+  if (cachedDB && now - lastRead < CACHE_TTL) return cachedDB;
+
+  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    console.error("Gist read error:", res.status);
+    return cachedDB || { ...defaultDB };
   }
 
-  const response = await fetch(url, {
-    method: "POST",
+  const gist = await res.json();
+  const content = gist.files?.["db.json"]?.content;
+  if (!content) return cachedDB || { ...defaultDB };
+
+  try {
+    cachedDB = JSON.parse(content);
+    lastRead = now;
+  } catch (e) {
+    console.error("JSON parse error:", e);
+  }
+  return cachedDB || { ...defaultDB };
+}
+
+async function gistWrite(db: GistDB): Promise<void> {
+  const content = JSON.stringify(db, null, 2);
+  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    method: "PATCH",
     headers: {
-      Authorization: `Bearer ${TURSO_TOKEN}`,
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      requests: [
-        { type: "execute", stmt },
-        { type: "close" },
-      ],
-    }),
+    body: JSON.stringify({ files: { "db.json": { content } } }),
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Turso API error ${response.status}: ${text}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gist write error ${res.status}: ${text}`);
   }
 
-  const data = await response.json();
-  const result = data.results?.[0];
-  if (!result) return { rows: [] };
-
-  if (result.type === "error") {
-    throw new Error(`Turso error: ${result.error?.message || JSON.stringify(result.error)}`);
-  }
-
-  const res = result.response?.result;
-  if (!res) return { rows: [] };
-
-  const cols = res.cols || [];
-  const rows = (res.rows || []).map((row: any[]) => {
-    const obj: Record<string, any> = {};
-    cols.forEach((col: any, i: number) => {
-      const val = row[i]?.value ?? row[i];
-      if (col.decltype === "INTEGER" && val !== null) {
-        obj[col.name] = Number(val);
-      } else {
-        obj[col.name] = val;
-      }
-    });
-    return obj;
-  });
-
-  return { rows, lastInsertRowid: res.last_insert_rowid };
+  cachedDB = db;
+  lastRead = Date.now();
 }
-
-let initialized = false;
 
 export async function ensureDb() {
-  if (initialized) return;
-
-  await tursoExec(`CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS apps (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    secret TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (admin_id) REFERENCES admins(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS resellers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER NOT NULL,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    key_limit INTEGER DEFAULT 50,
-    keys_used INTEGER DEFAULT 0,
-    credits REAL DEFAULT 0,
-    credit_cost REAL DEFAULT 1.0,
-    is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (admin_id) REFERENCES admins(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS end_users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    username TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    hwid TEXT DEFAULT '',
-    is_banned INTEGER DEFAULT 0,
-    last_login TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (app_id) REFERENCES apps(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS licenses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    created_by_type TEXT DEFAULT 'admin',
-    created_by_id INTEGER DEFAULT 0,
-    license_key TEXT UNIQUE NOT NULL,
-    package_name TEXT DEFAULT '',
-    type TEXT DEFAULT 'subscription',
-    duration_days INTEGER DEFAULT 30,
-    hwid TEXT DEFAULT '',
-    is_used INTEGER DEFAULT 0,
-    used_by INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    expires_at TEXT,
-    FOREIGN KEY (app_id) REFERENCES apps(id),
-    FOREIGN KEY (used_by) REFERENCES end_users(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS login_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    user_id INTEGER,
-    username TEXT NOT NULL,
-    ip_address TEXT DEFAULT '',
-    hwid TEXT DEFAULT '',
-    pc_name TEXT DEFAULT '',
-    os_info TEXT DEFAULT '',
-    cpu_info TEXT DEFAULT '',
-    ram_info TEXT DEFAULT '',
-    gpu_info TEXT DEFAULT '',
-    screen_res TEXT DEFAULT '',
-    mac_address TEXT DEFAULT '',
-    is_rdp INTEGER DEFAULT 0,
-    is_vm INTEGER DEFAULT 0,
-    is_sandbox INTEGER DEFAULT 0,
-    country TEXT DEFAULT '',
-    city TEXT DEFAULT '',
-    success INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (app_id) REFERENCES apps(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS active_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    user_id INTEGER,
-    username TEXT NOT NULL,
-    ip_address TEXT DEFAULT '',
-    hwid TEXT DEFAULT '',
-    pc_name TEXT DEFAULT '',
-    os_info TEXT DEFAULT '',
-    cpu_info TEXT DEFAULT '',
-    ram_info TEXT DEFAULT '',
-    gpu_info TEXT DEFAULT '',
-    screen_res TEXT DEFAULT '',
-    mac_address TEXT DEFAULT '',
-    is_rdp INTEGER DEFAULT 0,
-    is_vm INTEGER DEFAULT 0,
-    is_sandbox INTEGER DEFAULT 0,
-    country TEXT DEFAULT '',
-    city TEXT DEFAULT '',
-    last_heartbeat TEXT DEFAULT (datetime('now')),
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (app_id) REFERENCES apps(id)
-  )`);
-
-  const check = await dbQuery("SELECT COUNT(*) as count FROM admins");
-  const count = Number(check.rows[0]?.count || 0);
-  if (count === 0) {
+  const db = await gistRead();
+  if (db.admins.length === 0) {
     const bcrypt = await import("bcryptjs");
     const hash = await bcrypt.hash("Zeniht2025", 10);
-    await dbRun("INSERT INTO admins (username, password_hash) VALUES (?, ?)", ["Zeniht", hash]);
-    const secret = generateAppSecret();
-    await dbRun("INSERT INTO apps (admin_id, name, secret) VALUES (?, ?, ?)", [1, "Default App", secret]);
-    console.log("Database initialized. Admin: Zeniht/Zeniht2025, App Secret:", secret);
+    db.admins.push({ id: 1, username: "Zeniht", password: hash, role: "admin" });
+    db.apps.push({ id: 1, name: "Default App", secret: generateAppSecret() });
+    await gistWrite(db);
+  }
+}
+
+function getTable(db: GistDB, table: string): any[] {
+  const t = db[table as keyof GistDB];
+  return Array.isArray(t) ? t : [];
+}
+
+function nextIdVal(db: GistDB, table: string): number {
+  const keyMap: Record<string, string> = {
+    keys: "key", end_users: "user", resellers: "reseller",
+    active_sessions: "session", login_history: "session",
+  };
+  const key = keyMap[table] || "key";
+  const id = (db.next_id as any)[key] || 1;
+  (db.next_id as any)[key] = id + 1;
+  return id;
+}
+
+function evalExpr(expr: string, row: any, args: any[]): any {
+  expr = expr.trim();
+
+  const maxMatch = expr.match(/MAX\((\d+),\s*(.+?)\)/i);
+  if (maxMatch) {
+    const base = parseInt(maxMatch[1]);
+    const inner = evalExpr(maxMatch[2], row, args);
+    return Math.max(base, inner);
   }
 
-  // Migration: add columns to existing tables if missing
-  try { await tursoExec("ALTER TABLE resellers ADD COLUMN credits REAL DEFAULT 0"); } catch {}
-  try { await tursoExec("ALTER TABLE resellers ADD COLUMN credit_cost REAL DEFAULT 1.0"); } catch {}
-  try { await tursoExec("ALTER TABLE licenses ADD COLUMN package_name TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE licenses ADD COLUMN hwid TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN hwid TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN pc_name TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN os_info TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN cpu_info TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN ram_info TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN gpu_info TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN screen_res TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN mac_address TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_rdp INTEGER DEFAULT 0"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_vm INTEGER DEFAULT 0"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_sandbox INTEGER DEFAULT 0"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN country TEXT DEFAULT ''"); } catch {}
-  try { await tursoExec("ALTER TABLE login_history ADD COLUMN city TEXT DEFAULT ''"); } catch {}
+  const sumMatch = expr.match(/^(\w+)\s*\+\s*(.+)$/);
+  if (sumMatch) {
+    const current = Number(row[sumMatch[1]]) || 0;
+    const val = evalExpr(sumMatch[2], row, args);
+    return current + val;
+  }
 
-  initialized = true;
+  const subMatch = expr.match(/^(\w+)\s*-\s*(.+)$/);
+  if (subMatch) {
+    const current = Number(row[subMatch[1]]) || 0;
+    const val = evalExpr(subMatch[2], row, args);
+    return current - val;
+  }
+
+  const argMatch = expr.match(/^\?$/);
+  if (argMatch) {
+    return args.shift();
+  }
+
+  const numMatch = expr.match(/^(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1]);
+
+  const strMatch = expr.match(/^'(.*)'$/);
+  if (strMatch) return strMatch[1];
+
+  const colMatch = expr.match(/^(\w+)$/);
+  if (colMatch && row[colMatch[1]] !== undefined) return row[colMatch[1]];
+
+  return expr;
 }
 
-export async function dbQuery(sql: string, args: any[] = []) {
-  return tursoExec(sql, args);
+function matchRow(row: any, whereParts: string[], args: any[]): boolean {
+  for (const part of whereParts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+
+    const neqMatch = trimmed.match(/(\w+)\s*!=\s*'([^']*)'/);
+    if (neqMatch) {
+      if (String(row[neqMatch[1]]) === neqMatch[2]) return false;
+      continue;
+    }
+
+    const neqNumMatch = trimmed.match(/(\w+)\s*!=\s*(\d+)/);
+    if (neqNumMatch && !neqMatch) {
+      if (String(row[neqNumMatch[1]]) === neqNumMatch[2]) return false;
+      continue;
+    }
+
+    const eqLitMatch = trimmed.match(/(\w+)\s*=\s*'([^']*)'/);
+    if (eqLitMatch) {
+      if (String(row[eqLitMatch[1]]) !== eqLitMatch[2]) return false;
+      continue;
+    }
+
+    const eqNumMatch = trimmed.match(/(\w+)\s*=\s*(\d+)/);
+    if (eqNumMatch && !eqLitMatch) {
+      if (String(row[eqNumMatch[1]]) !== eqNumMatch[2]) return false;
+      continue;
+    }
+
+    const likeMatch = trimmed.match(/(\w+)\s+LIKE\s+'([^']*)'/);
+    if (likeMatch) {
+      const pattern = likeMatch[2].replace(/%/g, ".*");
+      if (!new RegExp(`^${pattern}$`, "i").test(String(row[likeMatch[1]]))) return false;
+      continue;
+    }
+
+    const eqArgMatch = trimmed.match(/(\w+)\s*=\s*\?/);
+    if (eqArgMatch) {
+      const val = args.shift();
+      if (val === undefined || val === null) continue;
+      if (String(row[eqArgMatch[1]]) !== String(val)) return false;
+      continue;
+    }
+  }
+  return true;
 }
 
-export async function dbRun(sql: string, args: any[] = []) {
-  return tursoExec(sql, args);
+function parseWhere(whereStr: string): string[] {
+  if (!whereStr || !whereStr.trim()) return [];
+  return whereStr.split(/\s+AND\s+/i);
 }
 
-function generateAppSecret(): string {
+export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: any[] }> {
+  const db = await gistRead();
+
+  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+\d+)?$/i);
+  if (selectMatch) {
+    const [, cols, table, whereStr] = selectMatch;
+    let rows = [...getTable(db, table)];
+
+    if (whereStr) {
+      const whereParts = parseWhere(whereStr);
+      rows = rows.filter((r) => matchRow(r, whereParts, [...args]));
+    }
+
+    if (cols.trim() === "*") return { rows };
+
+    const countMatch = cols.match(/COUNT\(\*?\w*\)\s+as\s+(\w+)/i);
+    if (countMatch) {
+      return { rows: [{ [countMatch[1]]: rows.length }] };
+    }
+
+    const colList = cols.split(",").map((c) => c.trim().replace(/.*\./, "").replace(/\s+as\s+\w+/i, ""));
+    return {
+      rows: rows.map((r) => {
+        const obj: any = {};
+        colList.forEach((c) => { obj[c] = r[c]; });
+        return obj;
+      }),
+    };
+  }
+
+  return { rows: [] };
+}
+
+export async function dbRun(sql: string, args: any[] = []): Promise<{ rows: any[]; lastInsertRowid: number }> {
+  const db = await gistRead();
+  let lastInsertRowid = 0;
+
+  const insertMatch = sql.match(/INSERT\s+INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i);
+  if (insertMatch) {
+    const [, table, colsStr] = insertMatch;
+    const cols = colsStr.split(",").map((c) => c.trim());
+    const row: any = {};
+    cols.forEach((col, i) => {
+      let val = args[i];
+      if (val === undefined || val === "undefined") val = null;
+      row[col] = val;
+    });
+    const arr = getTable(db, table);
+    const id = nextIdVal(db, table);
+    row.id = row.id || id;
+    arr.push(row);
+    lastInsertRowid = row.id;
+    await gistWrite(db);
+    return { rows: [], lastInsertRowid };
+  }
+
+  const updateMatch = sql.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+?))?$/i);
+  if (updateMatch) {
+    const [, table, setStr, whereStr] = updateMatch;
+    const arr = getTable(db, table);
+    let rowsToUpdate = [...arr];
+
+    if (whereStr) {
+      const whereParts = parseWhere(whereStr);
+      rowsToUpdate = rowsToUpdate.filter((r) => matchRow(r, whereParts, [...args]));
+    }
+
+    const setParts = setStr.split(",").map((s) => s.trim());
+    for (const part of setParts) {
+      const eqMatch = part.match(/(\w+)\s*=\s*(.+)/);
+      if (!eqMatch) continue;
+      const [, col, valExpr] = eqMatch;
+
+      for (const row of rowsToUpdate) {
+        row[col] = evalExpr(valExpr, row, args);
+      }
+    }
+
+    await gistWrite(db);
+    return { rows: [], lastInsertRowid: 0 };
+  }
+
+  const deleteMatch = sql.match(/DELETE\s+FROM\s+(\w+)\s+WHERE\s+(.+?)$/i);
+  if (deleteMatch) {
+    const [, table, whereStr] = deleteMatch;
+    const arr = getTable(db, table);
+    const whereParts = parseWhere(whereStr);
+    const toRemove = arr.filter((r) => matchRow(r, whereParts, [...args]));
+    for (const r of toRemove) {
+      const idx = arr.indexOf(r);
+      if (idx >= 0) arr.splice(idx, 1);
+    }
+    await gistWrite(db);
+    return { rows: [], lastInsertRowid: 0 };
+  }
+
+  return { rows: [], lastInsertRowid: 0 };
+}
+
+export function generateAppSecret(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
   for (let i = 0; i < 32; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+export function generateLicenseKey(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const parts = [];
+  for (let p = 0; p < 4; p++) {
+    let part = "";
+    for (let i = 0; i < 4; i++) {
+      part += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    parts.push(part);
+  }
+  return parts.join("-");
 }

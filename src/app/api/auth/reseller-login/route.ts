@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { ensureDb, dbQuery } from "@/lib/db";
+import { ensureDb, dbQuery, dbRun } from "@/lib/db";
 import { createToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       // Log failed attempt
       const appResult2 = await dbQuery("SELECT id FROM apps LIMIT 1", []);
       const logAppId = appResult2.rows.length > 0 ? (appResult2.rows[0] as any).id : 1;
-      await dbQuery(
+      await dbRun(
         "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, 0, ?, ?, 0)",
         [logAppId, username, ip]
       );
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (!valid) {
       const appResult3 = await dbQuery("SELECT id FROM apps LIMIT 1", []);
       const logAppId2 = appResult3.rows.length > 0 ? (appResult3.rows[0] as any).id : 1;
-      await dbQuery(
+      await dbRun(
         "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, ?, ?, ?, 0)",
         [logAppId2, reseller.id, username, ip]
       );
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Log successful login
-    await dbQuery(
+    await dbRun(
       "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, ?, ?, ?, 1)",
       [appId, reseller.id, reseller.username, ip]
     );

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     await ensureDb();
 
     const keyResult = await dbQuery(
-      "SELECT l.*, a.id as app_id FROM licenses l JOIN apps a ON l.app_id = a.id WHERE l.license_key = ?",
+      "SELECT * FROM licenses WHERE license_key = ?",
       [key]
     );
 

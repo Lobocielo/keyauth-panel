@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { ensureDb, dbQuery } from "@/lib/db";
+import { ensureDb, dbQuery, dbRun } from "@/lib/db";
 import { createToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     // Log the login
     const appResult = await dbQuery("SELECT id FROM apps LIMIT 1", []);
     const logAppId = appResult.rows.length > 0 ? (appResult.rows[0] as any).id : 1;
-    await dbQuery(
+    await dbRun(
       "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, ?, ?, ?, 1)",
       [logAppId, admin.id, admin.username, req.headers.get("x-forwarded-for") || "unknown"]
     );

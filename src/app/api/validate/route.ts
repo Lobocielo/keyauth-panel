@@ -55,10 +55,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Update HWID
+      const now = new Date().toISOString();
       if (hwid && !user.hwid) {
-        await dbRun("UPDATE end_users SET hwid = ?, last_login = datetime('now') WHERE id = ?", [hwid, user.id]);
+        await dbRun("UPDATE end_users SET hwid = ?, last_login = ? WHERE id = ?", [hwid, now, user.id]);
       } else {
-        await dbRun("UPDATE end_users SET last_login = datetime('now') WHERE id = ?", [user.id]);
+        await dbRun("UPDATE end_users SET last_login = ? WHERE id = ?", [now, user.id]);
       }
 
       // Check if user has an active license
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
       if (userLicense.rows.length > 0) {
         const lic = userLicense.rows[0] as any;
         // Check if license is expired
-        if (lic.expires_at && lic.type !== 3) {
+        if (lic.expires_at && lic.type !== "3") {
           const expDate = new Date(lic.expires_at);
           if (expDate < new Date()) {
             return NextResponse.json({ success: false, message: "License expired", sessionid: "" });

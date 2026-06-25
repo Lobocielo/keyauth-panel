@@ -30,13 +30,6 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await dbQuery(query, params);
-
-    // Also get admin panel logins (from admins table activity)
-    const adminLogins = await dbQuery(
-      "SELECT lh.* FROM login_history lh INNER JOIN end_users eu ON lh.user_id = eu.id ORDER BY lh.created_at DESC LIMIT ?",
-      [limit]
-    );
-
     return NextResponse.json({ logs: result.rows });
   } catch (error) {
     console.error("Get logs error:", error);
