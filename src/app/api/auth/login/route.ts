@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 import { createToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Username and password required" }, { status: 400 });
     }
 
+    await ensureDb();
     const db = getDb();
     const result = await db.execute({
       sql: "SELECT * FROM admins WHERE username = ?",

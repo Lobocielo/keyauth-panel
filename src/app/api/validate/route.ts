@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Missing app credentials" }, { status: 400 });
     }
 
+    await ensureDb();
     const db = getDb();
 
     const appResult = await db.execute({

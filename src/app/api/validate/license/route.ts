@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Key required" });
     }
 
+    await ensureDb();
     const db = getDb();
 
     const keyResult = await db.execute({

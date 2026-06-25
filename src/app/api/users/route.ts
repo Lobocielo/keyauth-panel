@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    await ensureDb();
     const db = getDb();
     const appResult = await db.execute({
       sql: "SELECT id FROM apps WHERE admin_id = ?",
@@ -41,6 +42,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { userId } = await req.json();
+    await ensureDb();
     const db = getDb();
 
     const appResult = await db.execute({
@@ -74,6 +76,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { userId, is_banned } = await req.json();
+    await ensureDb();
     const db = getDb();
 
     const appResult = await db.execute({

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 
 export async function GET() {
   try {
@@ -9,6 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    await ensureDb();
     const db = getDb();
     const appResult = await db.execute({
       sql: "SELECT id, name, secret FROM apps WHERE admin_id = ?",

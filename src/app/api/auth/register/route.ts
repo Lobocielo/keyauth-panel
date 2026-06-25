@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb } from "@/lib/db";
+import { getDb, ensureDb } from "@/lib/db";
 import { createToken } from "@/lib/auth";
 import { generateAppSecret } from "@/lib/auth";
 
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Username min 3 chars, password min 4 chars" }, { status: 400 });
     }
 
+    await ensureDb();
     const db = getDb();
 
     const existing = await db.execute({
