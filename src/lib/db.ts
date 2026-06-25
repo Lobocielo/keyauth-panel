@@ -205,22 +205,19 @@ function parseWhere(whereStr: string): string[] {
 export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: any[] }> {
   const db = await gistRead();
 
-  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+(?!WHERE|ORDER|LIMIT|GROUP|HAVING|JOIN)\w+)?(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+(?:\d+|\?))?$/i);
+  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)/i);
   if (selectMatch) {
-    const [, cols, table, whereStr] = selectMatch;
+    const cols = selectMatch[1].trim();
+    const table = selectMatch[2];
     let rows = [...getTable(db, table)];
+    const argsCopy = [...args];
 
-    if (whereStr) {
-      const whereParts = parseWhere(whereStr);
-      rows = rows.filter((r) => matchRow(r, whereParts, [...args]));
-    }
+    const afterFrom = sql.substring(selectMatch.index! + selectMatch[0].length);
 
-    const limitMatch = sql.match(/LIMIT\s+(\d+|\?)\s*$/i);
-    if (limitMatch && limitMatch[1] === "?") {
-      const limitVal = parseInt(args.pop()) || 100;
-      rows = rows.slice(0, limitVal);
-    } else if (limitMatch && limitMatch[1] !== "?") {
-      rows = rows.slice(0, parseInt(limitMatch[1]));
+    const whereMatch = afterFrom.match(/\s+WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT\s+|\s*$)/i);
+    if (whereMatch) {
+      const whereParts = parseWhere(whereMatch[1].trim());
+      rows = rows.filter((r) => matchRow(r, whereParts, [...argsCopy]));
     }
 
     const orderByMatch = sql.match(/ORDER\s+BY\s+(\w+(?:\.\w+)?)\s+(ASC|DESC)/i);
@@ -235,7 +232,17 @@ export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: an
       });
     }
 
-    if (cols.trim() === "*") return { rows };
+    const limitMatch = sql.match(/LIMIT\s+(\d+|\?)/i);
+    if (limitMatch) {
+      if (limitMatch[1] === "?") {
+        const limitVal = parseInt(argsCopy.pop()) || 100;
+        rows = rows.slice(0, limitVal);
+      } else {
+        rows = rows.slice(0, parseInt(limitMatch[1]));
+      }
+    }
+
+    if (cols === "*") return { rows };
 
     const countMatch = cols.match(/COUNT\(\*?\w*\)\s+as\s+(\w+)/i);
     if (countMatch) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 
-const publicPaths = ["/login", "/register", "/api/auth/login", "/api/auth/register", "/api/auth/reseller-login", "/api/validate"];
+const publicPaths = ["/login", "/register", "/api/auth/login", "/api/auth/register", "/api/auth/reseller-login", "/api/validate", "/api/validate/heartbeat", "/api/validate/license", "/api/stats"];
 
 const resellerOnlyPaths = ["/dashboard/credits", "/dashboard/licenses"];
 const adminOnlyPaths = ["/dashboard/monitor", "/dashboard/logs", "/dashboard/resellers", "/dashboard/users"];
