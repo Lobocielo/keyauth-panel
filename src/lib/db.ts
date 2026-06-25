@@ -122,7 +122,43 @@ export async function ensureDb() {
     user_id INTEGER,
     username TEXT NOT NULL,
     ip_address TEXT DEFAULT '',
+    hwid TEXT DEFAULT '',
+    pc_name TEXT DEFAULT '',
+    os_info TEXT DEFAULT '',
+    cpu_info TEXT DEFAULT '',
+    ram_info TEXT DEFAULT '',
+    gpu_info TEXT DEFAULT '',
+    screen_res TEXT DEFAULT '',
+    mac_address TEXT DEFAULT '',
+    is_rdp INTEGER DEFAULT 0,
+    is_vm INTEGER DEFAULT 0,
+    is_sandbox INTEGER DEFAULT 0,
+    country TEXT DEFAULT '',
+    city TEXT DEFAULT '',
     success INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (app_id) REFERENCES apps(id)
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS active_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    user_id INTEGER,
+    username TEXT NOT NULL,
+    ip_address TEXT DEFAULT '',
+    hwid TEXT DEFAULT '',
+    pc_name TEXT DEFAULT '',
+    os_info TEXT DEFAULT '',
+    cpu_info TEXT DEFAULT '',
+    ram_info TEXT DEFAULT '',
+    gpu_info TEXT DEFAULT '',
+    screen_res TEXT DEFAULT '',
+    mac_address TEXT DEFAULT '',
+    is_rdp INTEGER DEFAULT 0,
+    is_vm INTEGER DEFAULT 0,
+    is_sandbox INTEGER DEFAULT 0,
+    country TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    last_heartbeat TEXT DEFAULT (datetime('now')),
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (app_id) REFERENCES apps(id)
   )`);
@@ -143,6 +179,19 @@ export async function ensureDb() {
   try { await tursoExec("ALTER TABLE resellers ADD COLUMN credit_cost REAL DEFAULT 1.0"); } catch {}
   try { await tursoExec("ALTER TABLE licenses ADD COLUMN package_name TEXT DEFAULT ''"); } catch {}
   try { await tursoExec("ALTER TABLE licenses ADD COLUMN hwid TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN hwid TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN pc_name TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN os_info TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN cpu_info TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN ram_info TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN gpu_info TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN screen_res TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN mac_address TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_rdp INTEGER DEFAULT 0"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_vm INTEGER DEFAULT 0"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN is_sandbox INTEGER DEFAULT 0"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN country TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE login_history ADD COLUMN city TEXT DEFAULT ''"); } catch {}
 
   initialized = true;
 }
