@@ -6,7 +6,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ username: "", password: "", email: "" });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
@@ -30,7 +30,7 @@ export default function UsersPage() {
     const data = await res.json();
     if (data.success) {
       setShowCreate(false);
-      setForm({ username: "", password: "", email: "" });
+      setForm({ username: "", password: "" });
       fetchUsers();
     } else {
       alert(data.error || "Error");
@@ -57,6 +57,15 @@ export default function UsersPage() {
     fetchUsers();
   }
 
+  function formatDate(d: any) {
+    if (!d) return "—";
+    try {
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return "—";
+      return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return "—"; }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -75,7 +84,7 @@ export default function UsersPage() {
       {showCreate && (
         <form onSubmit={handleCreate} className="bg-[#111] border border-gray-800/50 rounded-2xl p-6 space-y-4">
           <h3 className="text-lg font-semibold text-white">Nuevo Usuario</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Usuario</label>
               <input
@@ -92,15 +101,6 @@ export default function UsersPage() {
                 value={form.password}
                 onChange={e => setForm({ ...form, password: e.target.value })}
                 required
-                className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-800 rounded-xl text-white text-sm focus:outline-none focus:border-green-500/50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Email</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
                 className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-800 rounded-xl text-white text-sm focus:outline-none focus:border-green-500/50"
               />
             </div>
@@ -127,7 +127,8 @@ export default function UsersPage() {
               <thead>
                 <tr className="border-b border-gray-800/50 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <th className="px-6 py-4">Usuario</th>
-                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">HWID</th>
+                  <th className="px-6 py-4">Ultimo Login</th>
                   <th className="px-6 py-4">Estado</th>
                   <th className="px-6 py-4">Creado</th>
                   <th className="px-6 py-4">Acciones</th>
@@ -137,13 +138,16 @@ export default function UsersPage() {
                 {users.map(u => (
                   <tr key={u.id} className="border-b border-gray-800/30 hover:bg-white/[0.02]">
                     <td className="px-6 py-4 text-white font-medium">{u.username}</td>
-                    <td className="px-6 py-4 text-sm text-gray-400">{u.email || "—"}</td>
+                    <td className="px-6 py-4 text-xs text-gray-400 font-mono max-w-[180px] truncate" title={u.hwid || ""}>
+                      {u.hwid || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{formatDate(u.last_login)}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${u.is_banned ? "bg-red-500/15 text-red-400" : "bg-green-500/15 text-green-400"}`}>
                         {u.is_banned ? "Baneado" : "Activo"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{formatDate(u.created_at)}</td>
                     <td className="px-6 py-4">
                       <div className="flex gap-3">
                         <button onClick={() => toggleBan(u.id, u.is_banned)} className={`text-xs transition-colors ${u.is_banned ? "text-green-400 hover:text-green-300" : "text-yellow-400 hover:text-yellow-300"}`}>
