@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb, ensureDb } from "@/lib/db";
+import { ensureDb, dbQuery, dbRun } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,23 +10,16 @@ export async function GET(req: NextRequest) {
     }
 
     await ensureDb();
-    const db = getDb();
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
-
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
     if (appResult.rows.length === 0) {
       return NextResponse.json({ users: [] });
     }
 
     const appId = (appResult.rows[0] as any).id;
-
-    const result = await db.execute({
-      sql: "SELECT id, app_id, username, hwid, is_banned, last_login, created_at FROM end_users WHERE app_id = ? ORDER BY created_at DESC",
-      args: [appId],
-    });
-
+    const result = await dbQuery(
+      "SELECT id, app_id, username, hwid, is_banned, last_login, created_at FROM end_users WHERE app_id = ? ORDER BY created_at DESC",
+      [appId]
+    );
     return NextResponse.json({ users: result.rows });
   } catch (error) {
     console.error("Get users error:", error);
@@ -43,24 +36,14 @@ export async function DELETE(req: NextRequest) {
 
     const { userId } = await req.json();
     await ensureDb();
-    const db = getDb();
 
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
-
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
     if (appResult.rows.length === 0) {
       return NextResponse.json({ error: "No app found" }, { status: 404 });
     }
 
     const appId = (appResult.rows[0] as any).id;
-
-    await db.execute({
-      sql: "DELETE FROM end_users WHERE id = ? AND app_id = ?",
-      args: [userId, appId],
-    });
-
+    await dbRun("DELETE FROM end_users WHERE id = ? AND app_id = ?", [userId, appId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete user error:", error);
@@ -77,24 +60,14 @@ export async function PATCH(req: NextRequest) {
 
     const { userId, is_banned } = await req.json();
     await ensureDb();
-    const db = getDb();
 
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
-
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
     if (appResult.rows.length === 0) {
       return NextResponse.json({ error: "No app found" }, { status: 404 });
     }
 
     const appId = (appResult.rows[0] as any).id;
-
-    await db.execute({
-      sql: "UPDATE end_users SET is_banned = ? WHERE id = ? AND app_id = ?",
-      args: [is_banned ? 1 : 0, userId, appId],
-    });
-
+    await dbRun("UPDATE end_users SET is_banned = ? WHERE id = ? AND app_id = ?", [is_banned ? 1 : 0, userId, appId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Update user error:", error);

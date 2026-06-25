@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb, ensureDb } from "@/lib/db";
+import { ensureDb, dbQuery } from "@/lib/db";
 
 export async function GET() {
   try {
@@ -10,11 +10,7 @@ export async function GET() {
     }
 
     await ensureDb();
-    const db = getDb();
-    const appResult = await db.execute({
-      sql: "SELECT id, name, secret FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
+    const appResult = await dbQuery("SELECT id, name, secret FROM apps WHERE admin_id = ?", [session.userId]);
 
     if (appResult.rows.length === 0) {
       return NextResponse.json({
@@ -26,23 +22,21 @@ export async function GET() {
     const app = appResult.rows[0] as any;
     const appId = app.id;
 
-    const [totalKeys, usedKeys, activeUsers, bannedUsers, recentLogins] = await Promise.all([
-      db.execute({ sql: "SELECT COUNT(*) as count FROM licenses WHERE app_id = ?", args: [appId] }),
-      db.execute({ sql: "SELECT COUNT(*) as count FROM licenses WHERE app_id = ? AND is_used = 1", args: [appId] }),
-      db.execute({ sql: "SELECT COUNT(*) as count FROM end_users WHERE app_id = ? AND is_banned = 0", args: [appId] }),
-      db.execute({ sql: "SELECT COUNT(*) as count FROM end_users WHERE app_id = ? AND is_banned = 1", args: [appId] }),
-      db.execute({ sql: "SELECT * FROM login_history WHERE app_id = ? ORDER BY created_at DESC LIMIT 10", args: [appId] }),
+    const [totalKeys, usedKeys, activeUsers, bannedUsers] = await Promise.all([
+      dbQuery("SELECT COUNT(*) as count FROM licenses WHERE app_id = ?", [appId]),
+      dbQuery("SELECT COUNT(*) as count FROM licenses WHERE app_id = ? AND is_used = 1", [appId]),
+      dbQuery("SELECT COUNT(*) as count FROM end_users WHERE app_id = ? AND is_banned = 0", [appId]),
+      dbQuery("SELECT COUNT(*) as count FROM end_users WHERE app_id = ? AND is_banned = 1", [appId]),
     ]);
 
     return NextResponse.json({
       stats: {
-        totalKeys: (totalKeys.rows[0] as any).count,
-        usedKeys: (usedKeys.rows[0] as any).count,
-        activeUsers: (activeUsers.rows[0] as any).count,
-        bannedUsers: (bannedUsers.rows[0] as any).count,
+        totalKeys: Number(totalKeys.rows[0]?.count || 0),
+        usedKeys: Number(usedKeys.rows[0]?.count || 0),
+        activeUsers: Number(activeUsers.rows[0]?.count || 0),
+        bannedUsers: Number(bannedUsers.rows[0]?.count || 0),
       },
       app: { id: app.id, name: app.name, secret: app.secret },
-      recentLogins: recentLogins.rows,
     });
   } catch (error) {
     console.error("Get stats error:", error);

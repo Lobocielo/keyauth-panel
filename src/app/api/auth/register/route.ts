@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb, ensureDb } from "@/lib/db";
-import { createToken } from "@/lib/auth";
-import { generateAppSecret } from "@/lib/auth";
+import { ensureDb, dbQuery, dbRun } from "@/lib/db";
+import { createToken, generateAppSecret } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,42 +16,22 @@ export async function POST(req: NextRequest) {
     }
 
     await ensureDb();
-    const db = getDb();
 
-    const existing = await db.execute({
-      sql: "SELECT id FROM admins WHERE username = ?",
-      args: [username],
-    });
-
+    const existing = await dbQuery("SELECT id FROM admins WHERE username = ?", [username]);
     if (existing.rows.length > 0) {
       return NextResponse.json({ error: "Username already taken" }, { status: 409 });
     }
 
     const hash = await bcrypt.hash(password, 10);
-
-    const result = await db.execute({
-      sql: "INSERT INTO admins (username, password_hash) VALUES (?, ?)",
-      args: [username, hash],
-    });
-
+    const result = await dbRun("INSERT INTO admins (username, password_hash) VALUES (?, ?)", [username, hash]);
     const adminId = Number(result.lastInsertRowid);
 
     const secret = generateAppSecret();
-    await db.execute({
-      sql: "INSERT INTO apps (admin_id, name, secret) VALUES (?, ?, ?)",
-      args: [adminId, `${username}'s App`, secret],
-    });
+    await dbRun("INSERT INTO apps (admin_id, name, secret) VALUES (?, ?, ?)", [adminId, `${username}'s App`, secret]);
 
-    const token = await createToken({
-      userId: adminId,
-      username,
-      userType: "admin",
-    });
+    const token = await createToken({ userId: adminId, username, userType: "admin" });
 
-    const response = NextResponse.json({
-      success: true,
-      user: { id: Number(adminId), username },
-    });
+    const response = NextResponse.json({ success: true, user: { id: adminId, username } });
 
     response.cookies.set("token", token, {
       httpOnly: true,

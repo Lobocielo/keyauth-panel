@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, generateLicenseKey } from "@/lib/auth";
-import { getDb, ensureDb } from "@/lib/db";
+import { ensureDb, dbQuery, dbRun } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,23 +10,14 @@ export async function GET(req: NextRequest) {
     }
 
     await ensureDb();
-    const db = getDb();
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
 
     if (appResult.rows.length === 0) {
       return NextResponse.json({ keys: [] });
     }
 
     const appId = (appResult.rows[0] as any).id;
-
-    const result = await db.execute({
-      sql: "SELECT * FROM licenses WHERE app_id = ? ORDER BY created_at DESC",
-      args: [appId],
-    });
-
+    const result = await dbQuery("SELECT * FROM licenses WHERE app_id = ? ORDER BY created_at DESC", [appId]);
     return NextResponse.json({ keys: result.rows });
   } catch (error) {
     console.error("Get keys error:", error);
@@ -43,13 +34,8 @@ export async function POST(req: NextRequest) {
 
     const { type, duration_days, quantity } = await req.json();
     await ensureDb();
-    const db = getDb();
 
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
-
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
     if (appResult.rows.length === 0) {
       return NextResponse.json({ error: "No app found" }, { status: 404 });
     }
@@ -66,11 +52,10 @@ export async function POST(req: NextRequest) {
         d.setDate(d.getDate() + duration_days);
         expiresAt = d.toISOString();
       }
-
-      await db.execute({
-        sql: "INSERT INTO licenses (app_id, license_key, type, duration_days, expires_at) VALUES (?, ?, ?, ?, ?)",
-        args: [appId, key, type || "subscription", duration_days || 30, expiresAt],
-      });
+      await dbRun(
+        "INSERT INTO licenses (app_id, license_key, type, duration_days, expires_at) VALUES (?, ?, ?, ?, ?)",
+        [appId, key, type || "subscription", duration_days || 30, expiresAt]
+      );
       keys.push(key);
     }
 
@@ -90,24 +75,14 @@ export async function DELETE(req: NextRequest) {
 
     const { keyId } = await req.json();
     await ensureDb();
-    const db = getDb();
 
-    const appResult = await db.execute({
-      sql: "SELECT id FROM apps WHERE admin_id = ?",
-      args: [session.userId],
-    });
-
+    const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
     if (appResult.rows.length === 0) {
       return NextResponse.json({ error: "No app found" }, { status: 404 });
     }
 
     const appId = (appResult.rows[0] as any).id;
-
-    await db.execute({
-      sql: "DELETE FROM licenses WHERE id = ? AND app_id = ?",
-      args: [keyId, appId],
-    });
-
+    await dbRun("DELETE FROM licenses WHERE id = ? AND app_id = ?", [keyId, appId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete key error:", error);

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { getDb, ensureDb } from "@/lib/db";
+import { ensureDb, dbQuery } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,12 +10,11 @@ export async function POST(req: NextRequest) {
     }
 
     await ensureDb();
-    const db = getDb();
 
-    const keyResult = await db.execute({
-      sql: "SELECT l.*, a.id as app_id FROM licenses l JOIN apps a ON l.app_id = a.id WHERE l.license_key = ?",
-      args: [key],
-    });
+    const keyResult = await dbQuery(
+      "SELECT l.*, a.id as app_id FROM licenses l JOIN apps a ON l.app_id = a.id WHERE l.license_key = ?",
+      [key]
+    );
 
     if (keyResult.rows.length === 0) {
       return NextResponse.json({ success: false, message: "Invalid key" });

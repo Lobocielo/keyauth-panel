@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb, ensureDb } from "@/lib/db";
+import { ensureDb, dbQuery } from "@/lib/db";
 import { createToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -12,11 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     await ensureDb();
-    const db = getDb();
-    const result = await db.execute({
-      sql: "SELECT * FROM admins WHERE username = ?",
-      args: [username],
-    });
+    const result = await dbQuery("SELECT * FROM admins WHERE username = ?", [username]);
 
     if (result.rows.length === 0) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
