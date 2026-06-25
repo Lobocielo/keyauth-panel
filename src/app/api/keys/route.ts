@@ -41,17 +41,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { key, subscription_days, type, notes } = body;
+    const { key, subscription_days, type, notes, package_name } = body;
     await ensureDb();
 
     if (session.userType === "reseller") {
-      const rResult = await dbQuery("SELECT key_limit, keys_used FROM resellers WHERE id = ?", [session.userId]);
+      const rResult = await dbQuery("SELECT key_limit, keys_used, credits, credit_cost, is_active FROM resellers WHERE id = ?", [session.userId]);
       if (rResult.rows.length === 0) {
         return NextResponse.json({ error: "Reseller not found" }, { status: 404 });
       }
       const reseller = rResult.rows[0] as any;
+      if (!reseller.is_active) {
+        return NextResponse.json({ error: "Tu cuenta de revendedor esta desactivada" }, { status: 403 });
+      }
       if (reseller.keys_used >= reseller.key_limit) {
         return NextResponse.json({ error: "Has alcanzado tu limite de keys" }, { status: 403 });
+      }
+      const cost = reseller.credit_cost || 1.0;
+      if (reseller.credits < cost) {
+        return NextResponse.json({ error: `No tienes suficientes creditos. Necesitas ${cost}, tienes ${reseller.credits}` }, { status: 403 });
       }
 
       const appResult = await dbQuery("SELECT id FROM apps LIMIT 1", []);
@@ -69,10 +76,10 @@ export async function POST(req: NextRequest) {
       }
 
       await dbRun(
-        "INSERT INTO licenses (app_id, license_key, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, 'reseller', ?)",
-        [appId, keyValue, subscription_days || 30, type || 1, session.userId]
+        "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, 'reseller', ?)",
+        [appId, keyValue, package_name || "", subscription_days || 30, type || 1, session.userId]
       );
-      await dbRun("UPDATE resellers SET keys_used = keys_used + 1 WHERE id = ?", [session.userId]);
+      await dbRun("UPDATE resellers SET keys_used = keys_used + 1, credits = credits - ? WHERE id = ?", [cost, session.userId]);
 
       return NextResponse.json({ success: true, keys: [keyValue] });
     }
@@ -93,8 +100,8 @@ export async function POST(req: NextRequest) {
     }
 
     await dbRun(
-      "INSERT INTO licenses (app_id, license_key, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, 'admin', ?)",
-      [appId, keyValue, subscription_days || 30, type || 1, session.userId]
+      "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, 'admin', ?)",
+      [appId, keyValue, package_name || "", subscription_days || 30, type || 1, session.userId]
     );
 
     return NextResponse.json({ success: true, keys: [keyValue] });

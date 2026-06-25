@@ -82,6 +82,8 @@ export async function ensureDb() {
     password_hash TEXT NOT NULL,
     key_limit INTEGER DEFAULT 50,
     keys_used INTEGER DEFAULT 0,
+    credits REAL DEFAULT 0,
+    credit_cost REAL DEFAULT 1.0,
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (admin_id) REFERENCES admins(id)
@@ -103,8 +105,10 @@ export async function ensureDb() {
     created_by_type TEXT DEFAULT 'admin',
     created_by_id INTEGER DEFAULT 0,
     license_key TEXT UNIQUE NOT NULL,
+    package_name TEXT DEFAULT '',
     type TEXT DEFAULT 'subscription',
     duration_days INTEGER DEFAULT 30,
+    hwid TEXT DEFAULT '',
     is_used INTEGER DEFAULT 0,
     used_by INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
@@ -133,6 +137,12 @@ export async function ensureDb() {
     await dbRun("INSERT INTO apps (admin_id, name, secret) VALUES (?, ?, ?)", [1, "Default App", secret]);
     console.log("Database initialized. Admin: Zeniht/Zeniht2025, App Secret:", secret);
   }
+
+  // Migration: add columns to existing tables if missing
+  try { await tursoExec("ALTER TABLE resellers ADD COLUMN credits REAL DEFAULT 0"); } catch {}
+  try { await tursoExec("ALTER TABLE resellers ADD COLUMN credit_cost REAL DEFAULT 1.0"); } catch {}
+  try { await tursoExec("ALTER TABLE licenses ADD COLUMN package_name TEXT DEFAULT ''"); } catch {}
+  try { await tursoExec("ALTER TABLE licenses ADD COLUMN hwid TEXT DEFAULT ''"); } catch {}
 
   initialized = true;
 }

@@ -12,6 +12,12 @@ export async function GET() {
     await ensureDb();
 
     if (session.userType === "reseller") {
+      const resellerResult = await dbQuery(
+        "SELECT key_limit, keys_used, credits, credit_cost, is_active FROM resellers WHERE id = ?",
+        [session.userId]
+      );
+      const reseller = (resellerResult.rows[0] as any) || {};
+
       const [totalKeys, usedKeys] = await Promise.all([
         dbQuery("SELECT COUNT(*) as count FROM licenses WHERE created_by_type = 'reseller' AND created_by_id = ?", [session.userId]),
         dbQuery("SELECT COUNT(*) as count FROM licenses WHERE created_by_type = 'reseller' AND created_by_id = ? AND is_used = 1", [session.userId]),
@@ -23,6 +29,13 @@ export async function GET() {
           usedKeys: Number(usedKeys.rows[0]?.count || 0),
           activeUsers: 0,
           bannedUsers: 0,
+        },
+        reseller: {
+          key_limit: reseller.key_limit || 0,
+          keys_used: reseller.keys_used || 0,
+          credits: reseller.credits || 0,
+          credit_cost: reseller.credit_cost || 1.0,
+          is_active: reseller.is_active || 0,
         },
         app: null,
       });
