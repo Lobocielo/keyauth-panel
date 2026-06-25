@@ -10,6 +10,24 @@ export async function GET() {
     }
 
     await ensureDb();
+
+    if (session.userType === "reseller") {
+      const [totalKeys, usedKeys] = await Promise.all([
+        dbQuery("SELECT COUNT(*) as count FROM licenses WHERE created_by_type = 'reseller' AND created_by_id = ?", [session.userId]),
+        dbQuery("SELECT COUNT(*) as count FROM licenses WHERE created_by_type = 'reseller' AND created_by_id = ? AND is_used = 1", [session.userId]),
+      ]);
+
+      return NextResponse.json({
+        stats: {
+          totalKeys: Number(totalKeys.rows[0]?.count || 0),
+          usedKeys: Number(usedKeys.rows[0]?.count || 0),
+          activeUsers: 0,
+          bannedUsers: 0,
+        },
+        app: null,
+      });
+    }
+
     const appResult = await dbQuery("SELECT id, name, secret FROM apps WHERE admin_id = ?", [session.userId]);
 
     if (appResult.rows.length === 0) {

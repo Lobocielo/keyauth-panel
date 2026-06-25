@@ -53,10 +53,7 @@ async function tursoExec(sql: string, args: any[] = []): Promise<any> {
     return obj;
   });
 
-  return {
-    rows,
-    lastInsertRowid: res.last_insert_rowid,
-  };
+  return { rows, lastInsertRowid: res.last_insert_rowid };
 }
 
 let initialized = false;
@@ -64,70 +61,77 @@ let initialized = false;
 export async function ensureDb() {
   if (initialized) return;
 
-  const tables = [
-    `CREATE TABLE IF NOT EXISTS admins (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS apps (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      admin_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      secret TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (admin_id) REFERENCES admins(id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS end_users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      app_id INTEGER NOT NULL,
-      username TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      hwid TEXT DEFAULT '',
-      is_banned INTEGER DEFAULT 0,
-      last_login TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (app_id) REFERENCES apps(id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS licenses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      app_id INTEGER NOT NULL,
-      license_key TEXT UNIQUE NOT NULL,
-      type TEXT DEFAULT 'subscription',
-      duration_days INTEGER DEFAULT 30,
-      is_used INTEGER DEFAULT 0,
-      used_by INTEGER,
-      created_at TEXT DEFAULT (datetime('now')),
-      expires_at TEXT,
-      FOREIGN KEY (app_id) REFERENCES apps(id),
-      FOREIGN KEY (used_by) REFERENCES end_users(id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS login_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      app_id INTEGER NOT NULL,
-      user_id INTEGER,
-      username TEXT NOT NULL,
-      ip_address TEXT DEFAULT '',
-      success INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (app_id) REFERENCES apps(id)
-    )`,
-  ];
-
-  for (const table of tables) {
-    await tursoExec(table);
-  }
+  await tursoExec(`CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS apps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (admin_id) REFERENCES admins(id)
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS resellers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    key_limit INTEGER DEFAULT 50,
+    keys_used INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (admin_id) REFERENCES admins(id)
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS end_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    hwid TEXT DEFAULT '',
+    is_banned INTEGER DEFAULT 0,
+    last_login TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (app_id) REFERENCES apps(id)
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS licenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    created_by_type TEXT DEFAULT 'admin',
+    created_by_id INTEGER DEFAULT 0,
+    license_key TEXT UNIQUE NOT NULL,
+    type TEXT DEFAULT 'subscription',
+    duration_days INTEGER DEFAULT 30,
+    is_used INTEGER DEFAULT 0,
+    used_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT,
+    FOREIGN KEY (app_id) REFERENCES apps(id),
+    FOREIGN KEY (used_by) REFERENCES end_users(id)
+  )`);
+  await tursoExec(`CREATE TABLE IF NOT EXISTS login_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    user_id INTEGER,
+    username TEXT NOT NULL,
+    ip_address TEXT DEFAULT '',
+    success INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (app_id) REFERENCES apps(id)
+  )`);
 
   const check = await dbQuery("SELECT COUNT(*) as count FROM admins");
   const count = Number(check.rows[0]?.count || 0);
   if (count === 0) {
     const bcrypt = await import("bcryptjs");
-    const hash = await bcrypt.hash("admin", 10);
-    await dbRun("INSERT INTO admins (username, password_hash) VALUES (?, ?)", ["admin", hash]);
+    const hash = await bcrypt.hash("Zeniht2025", 10);
+    await dbRun("INSERT INTO admins (username, password_hash) VALUES (?, ?)", ["Zeniht", hash]);
     const secret = generateAppSecret();
     await dbRun("INSERT INTO apps (admin_id, name, secret) VALUES (?, ?, ?)", [1, "Default App", secret]);
-    console.log("Database initialized. Default admin: admin/admin, App Secret:", secret);
+    console.log("Database initialized. Admin: Zeniht/Zeniht2025, App Secret:", secret);
   }
 
   initialized = true;

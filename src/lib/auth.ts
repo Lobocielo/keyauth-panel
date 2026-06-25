@@ -2,13 +2,13 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "super-secret-change-me-in-production-32chars!"
+  process.env.JWT_SECRET || "kpl-change-this-to-random-string-9x8k2m"
 );
 
 export interface SessionPayload extends JWTPayload {
   userId: number;
   username: string;
-  userType: "admin" | "user";
+  userType: "admin" | "reseller";
   appId?: number;
 }
 
@@ -16,14 +16,14 @@ export async function createToken(payload: Omit<SessionPayload, "iat" | "exp" | 
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setIssuer("keyauth-panel")
+    .setIssuer("licensepanel")
     .setExpirationTime("7d")
     .sign(JWT_SECRET);
 }
 
 export async function verifyToken(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET, { issuer: "keyauth-panel" });
+    const { payload } = await jwtVerify(token, JWT_SECRET, { issuer: "licensepanel" });
     return payload as SessionPayload;
   } catch {
     return null;
@@ -39,12 +39,10 @@ export async function getSession(): Promise<SessionPayload | null> {
 
 export function generateLicenseKey(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const segments = 4;
-  const segmentLength = 5;
   const parts: string[] = [];
-  for (let i = 0; i < segments; i++) {
+  for (let i = 0; i < 4; i++) {
     let seg = "";
-    for (let j = 0; j < segmentLength; j++) {
+    for (let j = 0; j < 5; j++) {
       seg += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     parts.push(seg);
