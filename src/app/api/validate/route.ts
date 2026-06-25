@@ -5,7 +5,7 @@ import { ensureDb, dbQuery, dbRun } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, name, ownerid, secret, sessionid, username, password, hwid } = body;
+    const { type, name, ownerid, secret, sessionid, username, password, hwid, key } = body;
 
     if (!name || !ownerid || !secret) {
       return NextResponse.json({ success: false, message: "Missing app credentials" }, { status: 400 });
@@ -49,26 +49,49 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "User is banned", sessionid: "" });
       }
 
+      // HWID check
       if (hwid && user.hwid && user.hwid !== hwid) {
         return NextResponse.json({ success: false, message: "HWID mismatch", sessionid: "" });
       }
 
+      // Update HWID
       if (hwid && !user.hwid) {
         await dbRun("UPDATE end_users SET hwid = ?, last_login = datetime('now') WHERE id = ?", [hwid, user.id]);
       } else {
         await dbRun("UPDATE end_users SET last_login = datetime('now') WHERE id = ?", [user.id]);
       }
 
-      const licenseResult = await dbQuery(
-        "SELECT * FROM licenses WHERE app_id = ? AND is_used = 0 ORDER BY created_at DESC LIMIT 1",
-        [app.id]
+      // Check if user has an active license
+      const userLicense = await dbQuery(
+        "SELECT * FROM licenses WHERE app_id = ? AND used_by = ? AND is_used = 1 ORDER BY created_at DESC LIMIT 1",
+        [app.id, user.id]
       );
 
       let expiry = "";
-      if (licenseResult.rows.length > 0) {
-        const lic = licenseResult.rows[0] as any;
-        await dbRun("UPDATE licenses SET is_used = 1, used_by = ? WHERE id = ?", [user.id, lic.id]);
-        expiry = lic.expires_at || "";
+      if (userLicense.rows.length > 0) {
+        const lic = userLicense.rows[0] as any;
+        // Check if license is expired
+        if (lic.expires_at && lic.type !== 3) {
+          const expDate = new Date(lic.expires_at);
+          if (expDate < new Date()) {
+            return NextResponse.json({ success: false, message: "License expired", sessionid: "" });
+          }
+        }
+        expiry = lic.expires_at || "lifetime";
+      } else {
+        // No license assigned yet - try to assign one
+        const availableLicense = await dbQuery(
+          "SELECT * FROM licenses WHERE app_id = ? AND is_used = 0 ORDER BY created_at DESC LIMIT 1",
+          [app.id]
+        );
+
+        if (availableLicense.rows.length > 0) {
+          const lic = availableLicense.rows[0] as any;
+          await dbRun("UPDATE licenses SET is_used = 1, used_by = ? WHERE id = ?", [user.id, lic.id]);
+          expiry = lic.expires_at || "lifetime";
+        } else {
+          return NextResponse.json({ success: false, message: "No license available. Contact admin.", sessionid: "" });
+        }
       }
 
       await dbRun(
@@ -93,11 +116,32 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "Username already taken" });
       }
 
+      // If key is provided, validate it first
+      if (key) {
+        const keyResult = await dbQuery(
+          "SELECT * FROM licenses WHERE app_id = ? AND license_key = ? AND is_used = 0",
+          [app.id, key]
+        );
+
+        if (keyResult.rows.length === 0) {
+          return NextResponse.json({ success: false, message: "Invalid or already used key" });
+        }
+      }
+
       const hash = await bcrypt.hash(password, 10);
-      await dbRun(
+      const userResult = await dbRun(
         "INSERT INTO end_users (app_id, username, password_hash, hwid) VALUES (?, ?, ?, ?)",
         [app.id, username, hash, hwid || ""]
       );
+
+      // If key was provided, assign it to this new user
+      if (key) {
+        const userId = userResult.lastInsertRowid;
+        await dbRun(
+          "UPDATE licenses SET is_used = 1, used_by = ? WHERE app_id = ? AND license_key = ? AND is_used = 0",
+          [userId, app.id, key]
+        );
+      }
 
       return NextResponse.json({ success: true, message: "User registered", sessionid: "" });
     }
