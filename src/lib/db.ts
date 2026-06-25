@@ -146,47 +146,51 @@ function evalExpr(expr: string, row: any, args: any[]): any {
   return expr;
 }
 
+function cleanCol(col: string): string {
+  return col.replace(/^\w+\./, "");
+}
+
 function matchRow(row: any, whereParts: string[], args: any[]): boolean {
   for (const part of whereParts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
 
-    const neqMatch = trimmed.match(/(\w+)\s*!=\s*'([^']*)'/);
+    const neqMatch = trimmed.match(/(\w+(?:\.\w+)?)\s*!=\s*'([^']*)'/);
     if (neqMatch) {
-      if (String(row[neqMatch[1]]) === neqMatch[2]) return false;
+      if (String(row[cleanCol(neqMatch[1])]) === neqMatch[2]) return false;
       continue;
     }
 
-    const neqNumMatch = trimmed.match(/(\w+)\s*!=\s*(\d+)/);
+    const neqNumMatch = trimmed.match(/(\w+(?:\.\w+)?)\s*!=\s*(\d+)/);
     if (neqNumMatch && !neqMatch) {
-      if (String(row[neqNumMatch[1]]) === neqNumMatch[2]) return false;
+      if (String(row[cleanCol(neqNumMatch[1])]) === neqNumMatch[2]) return false;
       continue;
     }
 
-    const eqLitMatch = trimmed.match(/(\w+)\s*=\s*'([^']*)'/);
+    const eqLitMatch = trimmed.match(/(\w+(?:\.\w+)?)\s*=\s*'([^']*)'/);
     if (eqLitMatch) {
-      if (String(row[eqLitMatch[1]]) !== eqLitMatch[2]) return false;
+      if (String(row[cleanCol(eqLitMatch[1])]) !== eqLitMatch[2]) return false;
       continue;
     }
 
-    const eqNumMatch = trimmed.match(/(\w+)\s*=\s*(\d+)/);
+    const eqNumMatch = trimmed.match(/(\w+(?:\.\w+)?)\s*=\s*(\d+)/);
     if (eqNumMatch && !eqLitMatch) {
-      if (String(row[eqNumMatch[1]]) !== eqNumMatch[2]) return false;
+      if (String(row[cleanCol(eqNumMatch[1])]) !== eqNumMatch[2]) return false;
       continue;
     }
 
-    const likeMatch = trimmed.match(/(\w+)\s+LIKE\s+'([^']*)'/);
+    const likeMatch = trimmed.match(/(\w+(?:\.\w+)?)\s+LIKE\s+'([^']*)'/);
     if (likeMatch) {
       const pattern = likeMatch[2].replace(/%/g, ".*");
-      if (!new RegExp(`^${pattern}$`, "i").test(String(row[likeMatch[1]]))) return false;
+      if (!new RegExp(`^${pattern}$`, "i").test(String(row[cleanCol(likeMatch[1])]))) return false;
       continue;
     }
 
-    const eqArgMatch = trimmed.match(/(\w+)\s*=\s*\?/);
+    const eqArgMatch = trimmed.match(/(\w+(?:\.\w+)?)\s*=\s*\?/);
     if (eqArgMatch) {
       const val = args.shift();
       if (val === undefined || val === null) continue;
-      if (String(row[eqArgMatch[1]]) !== String(val)) return false;
+      if (String(row[cleanCol(eqArgMatch[1])]) !== String(val)) return false;
       continue;
     }
   }
