@@ -205,7 +205,7 @@ function parseWhere(whereStr: string): string[] {
 export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: any[] }> {
   const db = await gistRead();
 
-  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+\d+)?$/i);
+  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+\w+)?(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+(?:\d+|\?))?$/i);
   if (selectMatch) {
     const [, cols, table, whereStr] = selectMatch;
     let rows = [...getTable(db, table)];
@@ -213,6 +213,26 @@ export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: an
     if (whereStr) {
       const whereParts = parseWhere(whereStr);
       rows = rows.filter((r) => matchRow(r, whereParts, [...args]));
+    }
+
+    const limitMatch = sql.match(/LIMIT\s+(\d+|\?)\s*$/i);
+    if (limitMatch && limitMatch[1] === "?") {
+      const limitVal = parseInt(args.pop()) || 100;
+      rows = rows.slice(0, limitVal);
+    } else if (limitMatch && limitMatch[1] !== "?") {
+      rows = rows.slice(0, parseInt(limitMatch[1]));
+    }
+
+    const orderByMatch = sql.match(/ORDER\s+BY\s+(\w+(?:\.\w+)?)\s+(ASC|DESC)/i);
+    if (orderByMatch) {
+      const col = cleanCol(orderByMatch[1]);
+      const desc = orderByMatch[2].toUpperCase() === "DESC";
+      rows.sort((a: any, b: any) => {
+        const va = a[col] || "";
+        const vb = b[col] || "";
+        const cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
+        return desc ? -cmp : cmp;
+      });
     }
 
     if (cols.trim() === "*") return { rows };
