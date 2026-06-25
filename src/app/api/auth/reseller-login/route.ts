@@ -15,9 +15,11 @@ export async function POST(req: NextRequest) {
     const result = await dbQuery("SELECT * FROM resellers WHERE username = ? AND is_active = 1", [username]);
     if (result.rows.length === 0) {
       // Log failed attempt
+      const appResult2 = await dbQuery("SELECT id FROM apps LIMIT 1", []);
+      const logAppId = appResult2.rows.length > 0 ? (appResult2.rows[0] as any).id : 1;
       await dbQuery(
-        "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (0, 0, ?, ?, 0)",
-        [username, ip]
+        "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, 0, ?, ?, 0)",
+        [logAppId, username, ip]
       );
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
@@ -25,9 +27,11 @@ export async function POST(req: NextRequest) {
     const reseller = result.rows[0] as any;
     const valid = await bcrypt.compare(password, reseller.password_hash);
     if (!valid) {
+      const appResult3 = await dbQuery("SELECT id FROM apps LIMIT 1", []);
+      const logAppId2 = appResult3.rows.length > 0 ? (appResult3.rows[0] as any).id : 1;
       await dbQuery(
-        "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (0, ?, ?, ?, 0)",
-        [reseller.id, username, ip]
+        "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (?, ?, ?, ?, 0)",
+        [logAppId2, reseller.id, username, ip]
       );
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
