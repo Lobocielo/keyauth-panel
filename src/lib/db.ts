@@ -3,7 +3,12 @@ const TURSO_URL = RAW_URL.replace("libsql://", "https://");
 const TURSO_TOKEN = process.env.DATABASE_AUTH_TOKEN || "";
 
 async function tursoExec(sql: string, args: any[] = []): Promise<any> {
-  const url = `${TURSO_URL}/v1/execute`;
+  const url = `${TURSO_URL}/v2/pipeline`;
+  const stmt: any = { sql };
+  if (args.length > 0) {
+    stmt.args = args.map((a) => ({ type: "text", value: String(a) }));
+  }
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -11,8 +16,10 @@ async function tursoExec(sql: string, args: any[] = []): Promise<any> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      stmt: sql,
-      args: args.map((a) => String(a)),
+      requests: [
+        { type: "execute", stmt },
+        { type: "close" },
+      ],
     }),
   });
 
@@ -25,26 +32,25 @@ async function tursoExec(sql: string, args: any[] = []): Promise<any> {
   const result = data.results?.[0];
   if (!result) return { rows: [] };
 
-  if (result.message) {
-    return { rows: [], lastInsertRowid: data.last_insert_rowid };
+  if (result.type === "error") {
+    throw new Error(`Turso error: ${result.error?.message || JSON.stringify(result.error)}`);
   }
 
-  if (result.error_message) {
-    throw new Error(`Turso error: ${result.error_message}`);
-  }
+  const res = result.response?.result;
+  if (!res) return { rows: [] };
 
-  const cols = result.cols || [];
-  const rows = (result.rows || []).map((row: any[]) => {
+  const cols = res.cols || [];
+  const rows = (res.rows || []).map((row: any[]) => {
     const obj: Record<string, any> = {};
     cols.forEach((col: any, i: number) => {
-      obj[col.name] = row[i];
+      obj[col.name] = row[i]?.value ?? row[i];
     });
     return obj;
   });
 
   return {
     rows,
-    lastInsertRowid: data.last_insert_rowid,
+    lastInsertRowid: res.last_insert_rowid,
   };
 }
 
@@ -53,54 +59,60 @@ let initialized = false;
 export async function ensureDb() {
   if (initialized) return;
 
-  await tursoExec(`CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS apps (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    secret TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (admin_id) REFERENCES admins(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS end_users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    username TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    hwid TEXT DEFAULT '',
-    is_banned INTEGER DEFAULT 0,
-    last_login TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (app_id) REFERENCES apps(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS licenses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    license_key TEXT UNIQUE NOT NULL,
-    type TEXT DEFAULT 'subscription',
-    duration_days INTEGER DEFAULT 30,
-    is_used INTEGER DEFAULT 0,
-    used_by INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    expires_at TEXT,
-    FOREIGN KEY (app_id) REFERENCES apps(id),
-    FOREIGN KEY (used_by) REFERENCES end_users(id)
-  )`);
-  await tursoExec(`CREATE TABLE IF NOT EXISTS login_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    user_id INTEGER,
-    username TEXT NOT NULL,
-    ip_address TEXT DEFAULT '',
-    success INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (app_id) REFERENCES apps(id)
-  )`);
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS apps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      secret TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (admin_id) REFERENCES admins(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS end_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      app_id INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      hwid TEXT DEFAULT '',
+      is_banned INTEGER DEFAULT 0,
+      last_login TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (app_id) REFERENCES apps(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS licenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      app_id INTEGER NOT NULL,
+      license_key TEXT UNIQUE NOT NULL,
+      type TEXT DEFAULT 'subscription',
+      duration_days INTEGER DEFAULT 30,
+      is_used INTEGER DEFAULT 0,
+      used_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT,
+      FOREIGN KEY (app_id) REFERENCES apps(id),
+      FOREIGN KEY (used_by) REFERENCES end_users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS login_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      app_id INTEGER NOT NULL,
+      user_id INTEGER,
+      username TEXT NOT NULL,
+      ip_address TEXT DEFAULT '',
+      success INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (app_id) REFERENCES apps(id)
+    )`,
+  ];
+
+  for (const table of tables) {
+    await tursoExec(table);
+  }
 
   const check = await dbQuery("SELECT COUNT(*) as count FROM admins");
   const count = Number(check.rows[0]?.count || 0);
