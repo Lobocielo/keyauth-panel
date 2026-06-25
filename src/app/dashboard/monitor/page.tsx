@@ -40,8 +40,8 @@ export default function MonitorPage() {
 
       // Detect new connections
       if (sessions.length > 0) {
-        const oldUsernames = sessions.map(s => s.username + s.hwid);
-        const newUsernames = newSessions.map(s => s.username + s.hwid);
+        const oldUsernames = sessions.map((s: Session) => s.username + s.hwid);
+        const newUsernames = newSessions.map((s: Session) => s.username + s.hwid);
         for (const u of newUsernames) {
           if (!oldUsernames.includes(u)) {
             const s = newSessions.find((n: Session) => n.username + n.hwid === u);
