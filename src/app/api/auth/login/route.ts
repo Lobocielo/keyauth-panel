@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
       userType: "admin",
     });
 
+    // Log the login
+    await dbQuery(
+      "INSERT INTO login_history (app_id, user_id, username, ip_address, success) VALUES (0, ?, ?, ?, 1)",
+      [admin.id, admin.username, req.headers.get("x-forwarded-for") || "unknown"]
+    );
+
     const response = NextResponse.json({
       success: true,
       user: { id: admin.id, username: admin.username },

@@ -21,8 +21,12 @@ export default function LicensesPage() {
   const [form, setForm] = useState({ package_name: "Default", subscription_days: "30", type: "1", quantity: "1" });
   const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState("");
+  const [credits, setCredits] = useState(0);
 
-  useEffect(() => { fetchLicenses(); }, []);
+  useEffect(() => {
+    fetchLicenses();
+    fetch("/api/stats").then(r => r.json()).then(d => setCredits(d.reseller?.credits || 0));
+  }, []);
 
   async function fetchLicenses() {
     setLoading(true);
@@ -75,6 +79,10 @@ export default function LicensesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">Licencias</h2>
+        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+          <span className="text-emerald-400 font-bold">{credits.toFixed(1)}</span>
+          <span className="text-emerald-400/70 text-sm">creditos</span>
+        </div>
       </div>
 
       {/* Table Header */}
