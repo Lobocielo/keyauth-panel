@@ -5,11 +5,11 @@ export interface GistDB {
   apps: any[];
   admins: any[];
   resellers: any[];
-  keys: any[];
+  licenses: any[];
   end_users: any[];
   login_history: any[];
   active_sessions: any[];
-  next_id: { key: number; user: number; reseller: number; session: number };
+  next_id: { license: number; user: number; reseller: number; session: number };
 }
 
 let cachedDB: GistDB | null = null;
@@ -18,13 +18,13 @@ const CACHE_TTL = 2000;
 
 const defaultDB: GistDB = {
   apps: [{ id: 1, name: "Default App", secret: "1yfUR0CH18FdIN7galQapWCMY8GxZmCx" }],
-  admins: [{ id: 1, username: "Zeniht", password: "Zeniht2025", role: "admin" }],
+  admins: [{ id: 1, username: "Zeniht", password_hash: "", role: "admin" }],
   resellers: [],
-  keys: [],
+  licenses: [],
   end_users: [],
   login_history: [],
   active_sessions: [],
-  next_id: { key: 1, user: 1, reseller: 1, session: 1 },
+  next_id: { license: 1, user: 1, reseller: 1, session: 1 },
 };
 
 async function gistRead(): Promise<GistDB> {
@@ -96,10 +96,10 @@ function getTable(db: GistDB, table: string): any[] {
 
 function nextIdVal(db: GistDB, table: string): number {
   const keyMap: Record<string, string> = {
-    keys: "key", end_users: "user", resellers: "reseller",
+    licenses: "license", end_users: "user", resellers: "reseller",
     active_sessions: "session", login_history: "session",
   };
-  const key = keyMap[table] || "key";
+  const key = keyMap[table] || "license";
   const id = (db.next_id as any)[key] || 1;
   (db.next_id as any)[key] = id + 1;
   return id;
