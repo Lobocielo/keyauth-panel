@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
       }
 
       await dbRun(
-        "INSERT INTO licenses (app_id, key_value, subscription_days, type, notes, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, 'reseller', ?)",
-        [appId, keyValue, subscription_days || 30, type || 1, notes || null, session.userId]
+        "INSERT INTO licenses (app_id, license_key, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, 'reseller', ?)",
+        [appId, keyValue, subscription_days || 30, type || 1, session.userId]
       );
       await dbRun("UPDATE resellers SET keys_used = keys_used + 1 WHERE id = ?", [session.userId]);
 
@@ -93,8 +93,8 @@ export async function POST(req: NextRequest) {
     }
 
     await dbRun(
-      "INSERT INTO licenses (app_id, key_value, subscription_days, type, notes, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, 'admin', ?)",
-      [appId, keyValue, subscription_days || 30, type || 1, notes || null, session.userId]
+      "INSERT INTO licenses (app_id, license_key, duration_days, type, created_by_type, created_by_id) VALUES (?, ?, ?, ?, 'admin', ?)",
+      [appId, keyValue, subscription_days || 30, type || 1, session.userId]
     );
 
     return NextResponse.json({ success: true, keys: [keyValue] });

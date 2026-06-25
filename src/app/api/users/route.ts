@@ -34,7 +34,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { userId } = await req.json();
+    const { user_id } = await req.json();
     await ensureDb();
 
     const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
@@ -43,7 +43,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const appId = (appResult.rows[0] as any).id;
-    await dbRun("DELETE FROM end_users WHERE id = ? AND app_id = ?", [userId, appId]);
+    await dbRun("DELETE FROM end_users WHERE id = ? AND app_id = ?", [user_id, appId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete user error:", error);
@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { userId, is_banned } = await req.json();
+    const { user_id, is_banned } = await req.json();
     await ensureDb();
 
     const appResult = await dbQuery("SELECT id FROM apps WHERE admin_id = ?", [session.userId]);
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const appId = (appResult.rows[0] as any).id;
-    await dbRun("UPDATE end_users SET is_banned = ? WHERE id = ? AND app_id = ?", [is_banned ? 1 : 0, userId, appId]);
+    await dbRun("UPDATE end_users SET is_banned = ? WHERE id = ? AND app_id = ?", [is_banned ? 1 : 0, user_id, appId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Update user error:", error);
