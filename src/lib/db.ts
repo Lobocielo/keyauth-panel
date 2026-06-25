@@ -43,7 +43,12 @@ async function tursoExec(sql: string, args: any[] = []): Promise<any> {
   const rows = (res.rows || []).map((row: any[]) => {
     const obj: Record<string, any> = {};
     cols.forEach((col: any, i: number) => {
-      obj[col.name] = row[i]?.value ?? row[i];
+      const val = row[i]?.value ?? row[i];
+      if (col.decltype === "INTEGER" && val !== null) {
+        obj[col.name] = Number(val);
+      } else {
+        obj[col.name] = val;
+      }
     });
     return obj;
   });
