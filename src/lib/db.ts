@@ -83,8 +83,8 @@ export async function ensureDb() {
   if (db.admins.length === 0) {
     const bcrypt = await import("bcryptjs");
     const hash = await bcrypt.hash("Zeniht2025", 10);
-    db.admins.push({ id: 1, username: "Zeniht", password: hash, role: "admin" });
-    db.apps.push({ id: 1, name: "Default App", secret: generateAppSecret() });
+    db.admins.push({ id: 1, username: "Zeniht", password_hash: hash, role: "admin" });
+    db.apps.push({ id: 1, name: "Default App", secret: generateAppSecret(), admin_id: 1, created_at: new Date().toISOString() });
     await gistWrite(db);
   }
 }
