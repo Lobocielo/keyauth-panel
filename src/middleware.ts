@@ -3,6 +3,9 @@ import { verifyToken } from "@/lib/auth";
 
 const publicPaths = ["/login", "/register", "/api/auth/login", "/api/auth/register", "/api/auth/reseller-login", "/api/validate"];
 
+const resellerOnlyPaths = ["/dashboard/credits", "/dashboard/licenses"];
+const adminOnlyPaths = ["/dashboard/monitor", "/dashboard/logs", "/dashboard/resellers", "/dashboard/users"];
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -29,6 +32,16 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  // Block admin from reseller-only pages
+  if (session.userType === "admin" && resellerOnlyPaths.some(p => pathname === p || pathname.startsWith(p + "/"))) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // Block reseller from admin-only pages
+  if (session.userType === "reseller" && adminOnlyPaths.some(p => pathname === p || pathname.startsWith(p + "/"))) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();
