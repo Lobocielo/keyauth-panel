@@ -1,4 +1,5 @@
-const TURSO_URL = process.env.DATABASE_URL || "";
+const RAW_URL = process.env.DATABASE_URL || "";
+const TURSO_URL = RAW_URL.replace("libsql://", "https://");
 const TURSO_TOKEN = process.env.DATABASE_AUTH_TOKEN || "";
 
 async function tursoExec(sql: string, args: any[] = []): Promise<any> {
