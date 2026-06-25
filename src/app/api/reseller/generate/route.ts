@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         expiresAt = d.toISOString();
       }
       await dbRun(
-        "INSERT INTO licenses (app_id, created_by_type, created_by_id, license_key, type, duration_days, expires_at) VALUES (?, 'reseller', ?, ?, ?, ?, ?)",
+        "INSERT INTO licenses (app_id, created_by_type, created_by_id, license_key, type, duration_days, expires_at, is_used) VALUES (?, 'reseller', ?, ?, ?, ?, ?, 0)",
         [appId, session.userId, key, type || "subscription", duration_days || 30, expiresAt]
       );
       keys.push(key);

@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         }
 
         await dbRun(
-          "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, expires_at, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, ?, 'reseller', ?)",
+          "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, expires_at, created_by_type, created_by_id, is_used) VALUES (?, ?, ?, ?, ?, ?, 'reseller', ?, 0)",
           [appId, keyValue, package_name || "", days, typeStr, expiresAt, session.userId]
         );
         keys.push(keyValue);
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       }
 
       await dbRun(
-        "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, expires_at, created_by_type, created_by_id) VALUES (?, ?, ?, ?, ?, ?, 'admin', ?)",
+        "INSERT INTO licenses (app_id, license_key, package_name, duration_days, type, expires_at, created_by_type, created_by_id, is_used) VALUES (?, ?, ?, ?, ?, ?, 'admin', ?, 0)",
         [appId, keyValue, package_name || "", days, typeStr, expiresAt, session.userId]
       );
       keys.push(keyValue);
