@@ -205,7 +205,7 @@ function parseWhere(whereStr: string): string[] {
 export async function dbQuery(sql: string, args: any[] = []): Promise<{ rows: any[] }> {
   const db = await gistRead();
 
-  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+\w+)?(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+(?:\d+|\?))?$/i);
+  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+(?!WHERE|ORDER|LIMIT|GROUP|HAVING|JOIN)\w+)?(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+?)?(?:\s+LIMIT\s+(?:\d+|\?))?$/i);
   if (selectMatch) {
     const [, cols, table, whereStr] = selectMatch;
     let rows = [...getTable(db, table)];
